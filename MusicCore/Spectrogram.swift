@@ -126,10 +126,12 @@ nonisolated struct Spectrogram: Sendable {
     // |Z|, frame-major like the spectrogram.
     func magnitudes() -> [Double] {
         var magnitudes = [Double](repeating: 0, count: real.count)
-        var real = real, imag = imag
-        real.withUnsafeMutableBufferPointer { real in
-            imag.withUnsafeMutableBufferPointer { imag in
-                var split = DSPDoubleSplitComplex(realp: real.baseAddress!, imagp: imag.baseAddress!)
+        real.withUnsafeBufferPointer { real in
+            imag.withUnsafeBufferPointer { imag in
+                // vDSP only reads the split complex input.
+                var split = DSPDoubleSplitComplex(
+                    realp: UnsafeMutablePointer(mutating: real.baseAddress!),
+                    imagp: UnsafeMutablePointer(mutating: imag.baseAddress!))
                 vDSP_zvabsD(&split, 1, &magnitudes, 1, vDSP_Length(magnitudes.count))
             }
         }

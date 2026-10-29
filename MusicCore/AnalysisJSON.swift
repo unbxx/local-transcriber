@@ -82,7 +82,7 @@ extension MusicAnalysis.Timbre {
     }
 }
 
-nonisolated indirect enum JSONValue: Equatable, Sendable {
+nonisolated indirect enum JSONValue: Sendable {
     // Members in order.
     case object([(String, JSONValue)])
     case array([JSONValue])
@@ -90,18 +90,6 @@ nonisolated indirect enum JSONValue: Equatable, Sendable {
     case integer(Int)
     case string(String)
     case null
-
-    static func == (lhs: JSONValue, rhs: JSONValue) -> Bool {
-        switch (lhs, rhs) {
-        case (.object(let a), .object(let b)): a.map(\.0) == b.map(\.0) && a.map(\.1) == b.map(\.1)
-        case (.array(let a), .array(let b)): a == b
-        case (.number(let a), .number(let b)): a == b
-        case (.integer(let a), .integer(let b)): a == b
-        case (.string(let a), .string(let b)): a == b
-        case (.null, .null): true
-        default: false
-        }
-    }
 
     // Python's json encoder with indent=1.
     func write(to text: inout String, level: Int) {

@@ -6,7 +6,7 @@ import Foundation
 // time it starts. Bars assume 4/4: every fourth beat, from the beat most
 // chord changes fall on.
 nonisolated enum MusicMarkdownRenderer {
-    struct Bar: Equatable {
+    struct Bar {
         // "Bar 3", or "Pickup" before the first bar.
         var label: String
         var start: Double
@@ -14,11 +14,6 @@ nonisolated enum MusicMarkdownRenderer {
         // Chords sounding in the bar, from when they sound in it.
         var chords: [(name: String, time: Double)]
         var notes: [VocalNote]
-
-        static func == (lhs: Bar, rhs: Bar) -> Bool {
-            lhs.label == rhs.label && lhs.start == rhs.start && lhs.end == rhs.end && lhs.notes == rhs.notes
-                && lhs.chords.map(\.name) == rhs.chords.map(\.name) && lhs.chords.map(\.time) == rhs.chords.map(\.time)
-        }
     }
 
     // A vocal note starting this much before a bar line belongs to that bar.
