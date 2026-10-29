@@ -171,23 +171,24 @@ nonisolated enum TonalAnalysis {
     // Chooses between the best key and its relative (C major ↔ A minor) by
     // which tonic chord sounds longest, with a bonus for opening (0.15) and
     // closing (0.1) the song.
-    static func refineKey(
-        _ keys: [KeyCandidate], chords: [ChordSegment]
-    ) -> (key: (tonic: String, mode: String), relative: (tonic: String, mode: String)) {
-        let best = (tonic: keys[0].tonic, mode: keys[0].mode)
+    typealias Key = (tonic: String, mode: String)
+
+    static func refineKey(_ keys: [KeyCandidate], chords: [ChordSegment]) -> (key: Key, relative: Key) {
+        let best: Key = (keys[0].tonic, keys[0].mode)
         let index = Pitch.names.firstIndex(of: best.tonic)!
-        let relative = best.mode == major
-            ? (tonic: Pitch.names[(index + 9) % 12], mode: minor)
-            : (tonic: Pitch.names[(index + 3) % 12], mode: major)
+        let relative: Key = best.mode == major
+            ? (Pitch.names[(index + 9) % 12], minor)
+            : (Pitch.names[(index + 3) % 12], major)
         let real = chords.filter { $0.chord != "N" }
         guard let opening = real.first, let closing = real.last else { return (best, relative) }
 
-        func tonicScore(_ key: (tonic: String, mode: String)) -> Double {
+        func tonicScore(_ key: Key) -> Double {
             let name = key.tonic + (key.mode == minor ? "m" : "")
             let duration = real.filter { $0.chord == name }.reduce(0.0) { $0 + ($1.end - $1.start) }
             let total = real.reduce(0.0) { $0 + ($1.end - $1.start) }
             return duration / total + (opening.chord == name ? 0.15 : 0) + (closing.chord == name ? 0.1 : 0)
         }
-        return tonicScore(relative) > tonicScore(best) ? (relative, best) : (best, relative)
+        if tonicScore(relative) > tonicScore(best) { return (relative, best) }
+        return (best, relative)
     }
 }
