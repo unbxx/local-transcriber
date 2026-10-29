@@ -1,0 +1,3 @@
+# MusicCore
+
+Work in progress.

@@ -4,6 +4,10 @@ import PackageDescription
 // Test foundation only: `swift test` compiles the pure, Apple-Speech-free files
 // that already live in the app's folder (no copy, no Xcode project change, no
 // test code in the app target). The app itself is built by the Xcode project.
+//
+// MusicCore (music analysis: melody, notes, rhythm, harmony, loudness) lives
+// outside the app's folder, so the Xcode project's synchronized group does not
+// pick it up. The app does not use it yet.
 let package = Package(
     name: "TranscriptCore",
     platforms: [.macOS(.v26)],
@@ -27,6 +31,23 @@ let package = Package(
             name: "TranscriptCoreTests",
             dependencies: ["TranscriptCore"],
             path: "Tests/TranscriptCoreTests",
+            exclude: ["Fixtures"],
+            resources: [.copy("Fixtures")],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
+        .target(
+            name: "MusicCore",
+            path: "MusicCore",
+            exclude: ["README.md"],
+            // Same default as the app target, so the files could move into it
+            // unchanged; the analysis types are `nonisolated` to run off the
+            // main actor.
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
+        .testTarget(
+            name: "MusicCoreTests",
+            dependencies: ["MusicCore"],
+            path: "Tests/MusicCoreTests",
             exclude: ["Fixtures"],
             resources: [.copy("Fixtures")],
             swiftSettings: [.defaultIsolation(MainActor.self)]
