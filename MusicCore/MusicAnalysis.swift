@@ -1,10 +1,11 @@
 import Foundation
 
-// The reference's analysis.json, field for field: its key names and order,
-// units, rounding and nulls, so results of either implementation can be
-// compared (and its eval_truth.py reads this one). The values that are text
-// (key names, separation method, band names) stay as the reference writes them.
-nonisolated struct MusicAnalysis: Codable, Equatable, Sendable {
+// The reference's analysis.json, field for field: its key names, units,
+// rounding and nulls, so results of either implementation can be compared
+// (and its eval_truth.py reads ours). Text values (mode names, separation
+// method, band names) stay as the reference writes them. Decoding reads either
+// file; `jsonData()` (AnalysisJSON.swift) writes it.
+nonisolated struct MusicAnalysis: Decodable, Equatable, Sendable {
     var meta: Meta
     var vocals: Vocals
     var rhythm: Rhythm
@@ -12,7 +13,7 @@ nonisolated struct MusicAnalysis: Codable, Equatable, Sendable {
     var loudness: Loudness
     var timbre: TimbreSet
 
-    struct Meta: Codable, Equatable, Sendable {
+    struct Meta: Decodable, Equatable, Sendable {
         var durationSeconds: Double
         var sampleRate: Int
         var separation: String
@@ -22,7 +23,7 @@ nonisolated struct MusicAnalysis: Codable, Equatable, Sendable {
         }
     }
 
-    struct Vocals: Codable, Equatable, Sendable {
+    struct Vocals: Decodable, Equatable, Sendable {
         var voicedRatio: Double
         // Lowest and highest note name; nil without notes.
         var range: [String]?
@@ -34,23 +35,14 @@ nonisolated struct MusicAnalysis: Codable, Equatable, Sendable {
             case voicedRatio = "voiced_ratio", range, medianNote = "median_note"
             case tuningOffsetCents = "tuning_offset_cents", notes
         }
-
-        func encode(to encoder: any Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(voicedRatio, forKey: .voicedRatio)
-            try container.encode(range, forKey: .range)
-            try container.encode(medianNote, forKey: .medianNote)
-            try container.encode(tuningOffsetCents, forKey: .tuningOffsetCents)
-            try container.encode(notes, forKey: .notes)
-        }
     }
 
-    struct Rhythm: Codable, Equatable, Sendable {
+    struct Rhythm: Decodable, Equatable, Sendable {
         var bpm: Double
         var beats: [Double]
     }
 
-    struct Harmony: Codable, Equatable, Sendable {
+    struct Harmony: Decodable, Equatable, Sendable {
         // "A mineur", "C majeur": the reference's Dutch mode names.
         var key: String
         var relativeKey: String
@@ -87,21 +79,11 @@ nonisolated struct MusicAnalysis: Codable, Equatable, Sendable {
             pitchClassProfile = try container.decodeValues(named: Pitch.names, forKey: .pitchClassProfile)
             chords = try container.decode([ChordSegment].self, forKey: .chords)
         }
-
-        func encode(to encoder: any Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(key, forKey: .key)
-            try container.encode(relativeKey, forKey: .relativeKey)
-            try container.encode(keyConfidence, forKey: .keyConfidence)
-            try container.encode(keyAlternatives, forKey: .keyAlternatives)
-            try container.encodeValues(pitchClassProfile, named: Pitch.names, forKey: .pitchClassProfile)
-            try container.encode(chords, forKey: .chords)
-        }
     }
 
     // Like the reference, audio shorter than one 400 ms block has only a null
     // integrated loudness.
-    struct Loudness: Codable, Equatable, Sendable {
+    struct Loudness: Decodable, Equatable, Sendable {
         var lufsIntegrated: Double?
         var loudnessRangeLU: Double?
         var peakDBFS: Double?
@@ -112,19 +94,9 @@ nonisolated struct MusicAnalysis: Codable, Equatable, Sendable {
             case lufsIntegrated = "lufs_integrated", loudnessRangeLU = "loudness_range_lu", peakDBFS = "peak_dbfs"
             case rmsDBFS = "rms_dbfs", crestFactorDB = "crest_factor_db"
         }
-
-        func encode(to encoder: any Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(lufsIntegrated, forKey: .lufsIntegrated)
-            guard let peakDBFS, let rmsDBFS, let crestFactorDB else { return }
-            try container.encode(loudnessRangeLU, forKey: .loudnessRangeLU)
-            try container.encode(peakDBFS, forKey: .peakDBFS)
-            try container.encode(rmsDBFS, forKey: .rmsDBFS)
-            try container.encode(crestFactorDB, forKey: .crestFactorDB)
-        }
     }
 
-    struct Timbre: Codable, Equatable, Sendable {
+    struct Timbre: Decodable, Equatable, Sendable {
         static let bands: [(name: String, range: Range<Double>)] = [
             ("sub (<60 Hz)", 0 ..< 60), ("laag (60-250)", 60 ..< 250), ("laag-mid (250-2k)", 250 ..< 2000),
             ("hoog-mid (2k-6k)", 2000 ..< 6000), ("lucht (>6k)", 6000 ..< 30_000),
@@ -162,25 +134,16 @@ nonisolated struct MusicAnalysis: Codable, Equatable, Sendable {
             stereoWidth = try container.decode(Double.self, forKey: .stereoWidth)
             stereoCorrelation = try container.decode(Double.self, forKey: .stereoCorrelation)
         }
-
-        func encode(to encoder: any Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(spectralCentroidHz, forKey: .spectralCentroidHz)
-            try container.encodeValues(energyDistributionPct, named: Self.bands.map(\.name), forKey: .energyDistributionPct)
-            try container.encode(spectralFlatness, forKey: .spectralFlatness)
-            try container.encode(stereoWidth, forKey: .stereoWidth)
-            try container.encode(stereoCorrelation, forKey: .stereoCorrelation)
-        }
     }
 
-    struct TimbreSet: Codable, Equatable, Sendable {
+    struct TimbreSet: Decodable, Equatable, Sendable {
         var mix: Timbre
         var vocals: Timbre
         var instrumental: Timbre
     }
 }
 
-nonisolated struct VocalNote: Codable, Equatable, Sendable {
+nonisolated struct VocalNote: Decodable, Equatable, Sendable {
     var start: Double
     var end: Double
     var midi: Int
@@ -194,7 +157,7 @@ nonisolated struct VocalNote: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ChordSegment: Codable, Equatable, Sendable {
+nonisolated struct ChordSegment: Decodable, Equatable, Sendable {
     var start: Double
     var end: Double
     // "Am", "F#", or "N" for no chord.
@@ -218,22 +181,13 @@ nonisolated enum Pitch {
     }
 }
 
-// JSON objects with a fixed key order (Python dicts) as arrays.
+// JSON objects with fixed keys (Python dicts) decoded as arrays.
 private struct NameKey: CodingKey {
     let stringValue: String
     init(_ name: String) { stringValue = name }
     init?(stringValue: String) { self.stringValue = stringValue }
     var intValue: Int? { nil }
     init?(intValue: Int) { nil }
-}
-
-nonisolated private extension KeyedEncodingContainer {
-    mutating func encodeValues(_ values: [Double], named names: [String], forKey key: Key) throws {
-        var object = nestedContainer(keyedBy: NameKey.self, forKey: key)
-        for (name, value) in zip(names, values) {
-            try object.encode(value, forKey: NameKey(name))
-        }
-    }
 }
 
 nonisolated private extension KeyedDecodingContainer {

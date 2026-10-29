@@ -33,8 +33,9 @@ struct LoudnessTests {
     @Test func shortAudioHasOnlyANullIntegratedLoudness() throws {
         let loudness = LoudnessMeter.loudness(sine(1000, amplitude: 0.5, seconds: 0.3))
         #expect(loudness == MusicAnalysis.Loudness())
-        let json = String(decoding: try JSONEncoder().encode(loudness), as: UTF8.self)
-        #expect(json == #"{"lufs_integrated":null}"#)
+        var json = ""
+        loudness.json.write(to: &json, level: 0)
+        #expect(json == "{\n \"lufs_integrated\": null\n}")
     }
 
     @Test func timbreOfASineInTheCentre() {

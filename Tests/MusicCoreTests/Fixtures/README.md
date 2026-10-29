@@ -11,3 +11,8 @@
   `reference-frames.json` holds the per-frame melody (f0, voicing), samples of
   the vocal stem, the onset envelope and chroma sums, so each step of the port
   can be compared with the reference on its own.
+- `reference-transcription.mid`: the reference's `write_midi` with the tracks
+  of its `run()` for `reference-analysis.json`, named Vocals, Chords and Bass
+  as in MusicCore (the reference names them in Dutch).
+- `test_song.md`: the expected Markdown transcript of the test song (golden;
+  MusicMarkdownRenderer's own format, not from the reference).
