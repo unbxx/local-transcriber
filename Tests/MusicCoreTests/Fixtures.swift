@@ -20,8 +20,12 @@ nonisolated enum Fixtures {
     // Computed once and shared by the tests.
     static let song = Task { try await AudioLoader.load(url("test_song.wav")) }
     static let separation = Task { Separation(try await song.value) }
-    // The whole pipeline from the file, off the main actor.
+    // The whole pipeline from the file, off the main actor: with the standard
+    // settings, and with the reference's.
     static let analysis = Task.detached { try await MusicAnalyzer.analyse(contentsOf: url("test_song.wav")) }
+    static let referenceResult = Task.detached {
+        try await MusicAnalyzer.analyse(contentsOf: url("test_song.wav"), settings: .reference)
+    }
 }
 
 // test_truth.json, and the scores of AudioLens's eval_truth.py.

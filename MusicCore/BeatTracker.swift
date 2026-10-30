@@ -18,9 +18,9 @@ nonisolated enum BeatTracker {
 
     // `signal` is mono at 22.05 kHz. With more than three beats the tempo is
     // the median beat interval, otherwise the autocorrelation estimate.
-    static func analyse(_ signal: [Double]) -> Result {
+    static func analyse(_ signal: [Double], settings: AnalysisSettings) -> Result {
         let (envelope, fps) = onsetEnvelope(signal)
-        var bpm = tempo(envelope, framesPerSecond: fps)
+        var bpm = tempo(envelope, framesPerSecond: fps, periodMultiples: settings.tempoPeriodMultiples)
         let beats = beats(envelope, framesPerSecond: fps, bpm: bpm)
         if beats.count > 3 {
             bpm = 60 / Numerics.median(zip(beats.dropFirst(), beats).map { $0 - $1 })
@@ -60,15 +60,38 @@ nonisolated enum BeatTracker {
 
     // The autocorrelation lag between 60 and 200 BPM with the highest score,
     // weighted by a log-Gaussian (one octave wide) around 120 BPM and refined
-    // parabolically.
-    static func tempo(_ envelope: [Double], framesPerSecond fps: Double, lowest: Double = 60, highest: Double = 200) -> Double {
+    // parabolically. A lag's score sums the autocorrelation at the given
+    // multiples of it (read between lags linearly); the reference uses the lag
+    // alone.
+    static func tempo(
+        _ envelope: [Double], framesPerSecond fps: Double, periodMultiples: [AnalysisSettings.PeriodMultiple],
+        lowest: Double = 60, highest: Double = 200
+    ) -> Double {
         let centred = vDSP.add(-Numerics.mean(envelope), envelope)
-        let lags = Array(Int(60 * fps / highest)...Int(60 * fps / lowest)).filter { $0 < centred.count - 1 }
-        guard !lags.isEmpty else { return 120 }
+        let widest = periodMultiples.map(\.multiple).max() ?? 1
+        let lags = Array(Int(60 * fps / highest)...Int(60 * fps / lowest)).filter {
+            Double($0) * widest < Double(centred.count - 1)
+        }
+        guard let longest = lags.last else { return 120 }
+
+        let count = centred.count
+        let lastLag = min(count - 1, Int((Double(longest) * widest).rounded(.up)) + 1)
+        let autocorrelation = centred.withUnsafeBufferPointer { centred in
+            (0...lastLag).map { lag -> Double in
+                var sum = 0.0
+                vDSP_dotprD(centred.baseAddress! + lag, 1, centred.baseAddress!, 1, &sum, vDSP_Length(count - lag))
+                return sum
+            }
+        }
+        func correlation(at lag: Double) -> Double {
+            let i = Int(lag.rounded(.down)), fraction = lag - Double(i)
+            guard fraction > 0 else { return autocorrelation[i] }
+            return (autocorrelation[i + 1] - autocorrelation[i]) * fraction + autocorrelation[i]
+        }
         let scores = lags.map { lag -> Double in
-            let correlation = vDSP.dot(Array(centred[lag...]), Array(centred[..<(centred.count - lag)]))
+            let sum = periodMultiples.reduce(0.0) { $0 + $1.weight * correlation(at: Double(lag) * $1.multiple) }
             let octaves = log2(60 * fps / Double(lag) / 120) / 1.0
-            return correlation * exp(-0.5 * (octaves * octaves))
+            return sum * exp(-0.5 * (octaves * octaves))
         }
         let k = Numerics.argmax(scores)
         var lag = Double(lags[k])

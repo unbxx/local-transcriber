@@ -9,8 +9,6 @@ nonisolated enum TonalAnalysis {
     static let hop = 512
     static let lowestFrequency = 65.0
     static let highestFrequency = 2100.0
-    static let switchPenalty = 0.06
-    static let noChordScore = 0.72
     // The reference's mode names, which end up in analysis.json.
     static let major = "majeur", minor = "mineur"
     // Krumhansl–Kessler key profiles, tonic first.
@@ -34,11 +32,11 @@ nonisolated enum TonalAnalysis {
     }
 
     static func analyse(
-        _ signal: [Double], tuningCents: Double, beats: [Double], duration: Double
+        _ signal: [Double], tuningCents: Double, beats: [Double], duration: Double, settings: AnalysisSettings
     ) -> (harmony: MusicAnalysis.Harmony, chroma: Chromagram) {
         let chroma = chromagram(signal, tuningSemitones: tuningCents / 100)
         let keys = keyCandidates(chroma)
-        let chords = chords(chroma, beats: beats, duration: duration)
+        let chords = chords(chroma, beats: beats, duration: duration, settings: settings)
         let (key, relative) = refineKey(keys, chords: chords)
         let profile = (0..<12).map { pc in (0..<chroma.frameCount).reduce(0.0) { $0 + chroma.values[$1 * 12 + pc] } }
         let total = profile.reduce(0, +)
@@ -114,11 +112,22 @@ nonisolated enum TonalAnalysis {
         }
     }
 
-    // One chord per beat: the cosine of the beat's mean chroma with each
-    // template, or "N" (no chord) at a fixed 0.72; a Viterbi path where
-    // changing chords costs 0.06. Consecutive beats with the same chord are
-    // merged. Without beats the grid is every 0.5 s.
-    static func chords(_ chroma: Chromagram, beats: [Double], duration: Double) -> [ChordSegment] {
+    // The same templates with their mean removed, for correlation scoring.
+    static let centredTemplates: [[Double]] = templates.map { template in
+        let mean = template.vector.reduce(0, +) / 12
+        let centred = template.vector.map { $0 - mean }
+        let norm = vDSP.dot(centred, centred).squareRoot()
+        return centred.map { $0 / norm }
+    }
+
+    // One chord per beat: how well the beat's mean chroma matches each
+    // template (cosine or correlation), or "N" (no chord) at a fixed score; a
+    // Viterbi path where changing chords costs the switch penalty. Consecutive
+    // beats with the same chord are merged. Without beats the grid is every
+    // 0.5 s.
+    static func chords(
+        _ chroma: Chromagram, beats: [Double], duration: Double, settings: AnalysisSettings
+    ) -> [ChordSegment] {
         var edges = beats.isEmpty
             ? (0..<Int(((duration + 0.5) / 0.5).rounded(.up))).map { Double($0) * 0.5 }
             : [0] + beats + [duration]
@@ -129,11 +138,8 @@ nonisolated enum TonalAnalysis {
             let frames = chroma.times.indices.filter { chroma.times[$0] >= start && chroma.times[$0] < end }
             guard !frames.isEmpty && end - start >= 0.05 else { continue }
             let mean = (0..<12).map { pc in frames.reduce(0.0) { $0 + chroma.values[$1 * 12 + pc] } / Double(frames.count) }
-            let norm = vDSP.dot(mean, mean).squareRoot()
-            var row = norm > 1e-6
-                ? templates.map { template in vDSP.dot(template.vector, mean.map { $0 / norm }) }
-                : [Double](repeating: 0, count: templates.count)
-            row.append(noChordScore)
+            var row = templateScores(mean, scoring: settings.chordScoring)
+            row.append(settings.noChordScore)
             segments.append((start, end))
             scores.append(row)
         }
@@ -144,7 +150,7 @@ nonisolated enum TonalAnalysis {
         var back = [[Int]](repeating: [Int](repeating: 0, count: states), count: segments.count)
         for i in 1..<segments.count {
             let best = Numerics.argmax(score)
-            let change = score[best] - switchPenalty
+            let change = score[best] - settings.chordSwitchPenalty
             back[i] = (0..<states).map { score[$0] >= change ? $0 : best }
             score = (0..<states).map { max(score[$0], change) + scores[i][$0] }
         }
@@ -166,6 +172,23 @@ nonisolated enum TonalAnalysis {
             }
         }
         return chords
+    }
+
+    static func templateScores(_ chroma: [Double], scoring: AnalysisSettings.ChordScoring) -> [Double] {
+        switch scoring {
+        case .cosine:
+            let norm = vDSP.dot(chroma, chroma).squareRoot()
+            guard norm > 1e-6 else { return [Double](repeating: 0, count: templates.count) }
+            let unit = chroma.map { $0 / norm }
+            return templates.map { vDSP.dot($0.vector, unit) }
+        case .correlation:
+            let mean = chroma.reduce(0, +) / 12
+            let centred = chroma.map { $0 - mean }
+            let norm = vDSP.dot(centred, centred).squareRoot()
+            guard norm > 1e-6 else { return [Double](repeating: 0, count: templates.count) }
+            let unit = centred.map { $0 / norm }
+            return centredTemplates.map { vDSP.dot($0, unit) }
+        }
     }
 
     // Chooses between the best key and its relative (C major ↔ A minor) by

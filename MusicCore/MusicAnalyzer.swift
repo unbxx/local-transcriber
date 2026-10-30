@@ -3,7 +3,8 @@ import Foundation
 // The whole analysis, from the reference's `analyze`: separate and track the
 // melody, segment the notes, then rhythm on the mix and harmony on the
 // instrumental (both at 22.05 kHz), loudness and timbre. Runs off the main
-// actor; a 3-minute song takes a few seconds.
+// actor; a 3-minute song takes a few seconds. With `.reference` settings the
+// result is the reference's, byte for byte.
 nonisolated enum MusicAnalyzer {
     struct Result: Sendable {
         var analysis: MusicAnalysis
@@ -16,19 +17,19 @@ nonisolated enum MusicAnalyzer {
         var chroma: TonalAnalysis.Chromagram
     }
 
-    static func analyse(contentsOf url: URL) async throws -> Result {
-        analyse(try await AudioLoader.load(url))
+    static func analyse(contentsOf url: URL, settings: AnalysisSettings = .standard) async throws -> Result {
+        analyse(try await AudioLoader.load(url), settings: settings)
     }
 
-    static func analyse(_ audio: StereoAudio) -> Result {
+    static func analyse(_ audio: StereoAudio, settings: AnalysisSettings = .standard) -> Result {
         let separation = Separation(audio)
         let melody = separation.melody
         let (notes, tuningCents) = NoteSegmentation.notes(
             times: melody.times, f0: melody.f0, voiced: melody.voiced, level: melody.salience)
-        let rhythm = BeatTracker.analyse(Numerics.halveSampleRate(audio.mid))
+        let rhythm = BeatTracker.analyse(Numerics.halveSampleRate(audio.mid), settings: settings)
         let tonal = TonalAnalysis.analyse(
             Numerics.halveSampleRate(separation.instrumental.mid), tuningCents: tuningCents, beats: rhythm.beats,
-            duration: audio.duration)
+            duration: audio.duration, settings: settings)
         let vocals = StereoAudio(left: separation.vocals, right: separation.vocals)
 
         let pitches = notes.map(\.midi)

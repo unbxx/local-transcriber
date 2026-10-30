@@ -4,7 +4,7 @@ import Testing
 
 struct ExportTests {
     @Test func analysisJSONIsByteIdenticalToTheReference() async throws {
-        let analysis = try await Fixtures.analysis.value.analysis
+        let analysis = try await Fixtures.referenceResult.value.analysis
         #expect(analysis.jsonData() == (try Data(contentsOf: Fixtures.url("reference-analysis.json"))))
     }
 
@@ -40,7 +40,7 @@ struct ExportTests {
     }
 
     @Test func midiIsByteIdenticalToTheReference() async throws {
-        let analysis = try await Fixtures.analysis.value.analysis
+        let analysis = try await Fixtures.referenceResult.value.analysis
         #expect(MIDIFile.transcription(analysis) == (try Data(contentsOf: Fixtures.url("reference-transcription.mid"))))
     }
 
@@ -64,8 +64,8 @@ struct ExportTests {
         #expect(MIDIFile.variableLength(0x0FFF_FFFF) == [0xFF, 0xFF, 0xFF, 0x7F])
     }
 
-    @Test func markdownMatchesTheGolden() async throws {
-        let analysis = try await Fixtures.analysis.value.analysis
+    @Test func markdownMatchesTheGolden() throws {
+        let analysis = try Fixtures.referenceAnalysis()
         let golden = try String(contentsOf: Fixtures.url("test_song.md"), encoding: .utf8)
         #expect(MusicMarkdownRenderer.render(analysis, sourceURL: Fixtures.url("test_song.wav")) == golden)
     }

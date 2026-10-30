@@ -16,16 +16,29 @@ struct AcceptanceTests {
         #expect(truth.chordAccuracy(analysis.harmony.chords) >= 0.9)
     }
 
-    @Test func scoresLikeTheReference() async throws {
-        let analysis = try await Fixtures.analysis.value.analysis
+    @Test func referenceSettingsScoreLikeTheReference() async throws {
+        let analysis = try await Fixtures.referenceResult.value.analysis
         let truth = try Fixtures.truth()
         #expect(truth.noteF1(analysis.vocals.notes) == 1)
         #expect(analysis.rhythm.bpm == 99.4)
         #expect((truth.chordAccuracy(analysis.harmony.chords) * 1000).rounded() == 966)
     }
 
-    @Test func analysisEqualsTheReference() async throws {
-        #expect(try await Fixtures.analysis.value.analysis == Fixtures.referenceAnalysis())
+    @Test func referenceSettingsGiveTheReferencesAnalysis() async throws {
+        #expect(try await Fixtures.referenceResult.value.analysis == Fixtures.referenceAnalysis())
+    }
+
+    // The standard settings change only tempo and chords; on the test song
+    // the notes stay the same and the scores barely move.
+    @Test func standardSettingsKeepTheTestSongsResults() async throws {
+        let analysis = try await Fixtures.analysis.value.analysis
+        let reference = try Fixtures.referenceAnalysis()
+        let truth = try Fixtures.truth()
+        #expect(analysis.vocals == reference.vocals)
+        #expect(analysis.rhythm.bpm == reference.rhythm.bpm)
+        #expect(analysis.harmony.key == reference.harmony.key)
+        #expect(truth.chordAccuracy(analysis.harmony.chords) >= 0.95)
+        #expect(analysis.harmony.chords.first?.chord == "N")
     }
 
     @Test func stemsAddUpToTheMix() async throws {
